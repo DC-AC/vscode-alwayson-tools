@@ -1,0 +1,57 @@
+# AlwaysOn Tools for VS Code
+
+Configure **SQL Server AlwaysOn Availability Group read-only routing** without leaving VS Code. This is a port of the Denny Cherry & Associates Consulting *AlwaysOn Tools* (originally a VB.NET WinForms app) to a VS Code extension.
+
+## Features
+
+- Connect to a SQL Server instance — an Availability Group **listener** or directly to the **primary replica**.
+- Browse **Availability Groups** and their **replicas** in a tree view in the activity bar.
+- Configure a replica's **read-only routing list** (the priority-ordered list of partner replicas) with a checkable, reorderable editor.
+- Configure a replica's **read-only routing URL** (`TCP://fqdn:port`).
+- **Generate the T-SQL** `ALTER AVAILABILITY GROUP` script or **apply it directly** to the server.
+- Optional **load-balanced (round-robin)** routing list on SQL Server 2017+.
+
+The tool validates on connect that the instance is SQL Server 2012+ with HADR enabled, mirroring the original application.
+
+## Authentication
+
+All authentication modes the original supported, plus Microsoft Entra:
+
+| Mode | Notes |
+| --- | --- |
+| SQL Server Authentication | User name + password |
+| Windows Authentication | NTLM — enter the account as `DOMAIN\user` + password |
+| Microsoft Entra - Password | Azure AD user + password |
+| Microsoft Entra - Integrated | Uses the signed-in Azure identity (no credentials) |
+
+> Windows authentication uses NTLM (cross-platform via the `tedious`/`mssql` driver), so a `DOMAIN\user` and password are required rather than the desktop's true integrated SSPI. The server rejects any auth mode it does not support.
+
+Passwords are stored in the VS Code **SecretStorage**; server profiles are stored in global state.
+
+## Usage
+
+1. Open the **AlwaysOn Tools** view in the activity bar.
+2. Click **Connect to a Server** and follow the prompts.
+3. Expand the server → Availability Group → replica.
+4. Right-click a replica:
+   - **Configure Read-Only Routing List…** — opens the routing-list editor.
+   - **Configure Read-Only Routing URL…** — sets the `TCP://` routing URL.
+
+## Development
+
+```bash
+npm install
+npm run compile      # or: npm run watch
+```
+
+Press **F5** in VS Code to launch an Extension Development Host.
+
+Package a `.vsix` with:
+
+```bash
+npx vsce package
+```
+
+## License
+
+MIT

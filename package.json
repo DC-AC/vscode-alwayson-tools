@@ -1,0 +1,186 @@
+{
+  "name": "alwayson-tools",
+  "displayName": "AlwaysOn Tools",
+  "description": "Configure SQL Server AlwaysOn Availability Group read-only routing from VS Code.",
+  "version": "1.0.0",
+  "publisher": "dcac",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "sql server",
+    "alwayson",
+    "availability group",
+    "read only routing",
+    "hadr"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "alwaysonTools",
+          "title": "AlwaysOn Tools",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "alwaysonTools": [
+        {
+          "id": "alwaysonTools.servers",
+          "name": "Availability Groups",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "alwaysonTools.servers",
+        "contents": "No SQL Server instances connected.\n[Connect to a Server](command:alwaysonTools.addServer)\n\nConnect to an AlwaysOn Availability Group listener or directly to the primary replica."
+      }
+    ],
+    "commands": [
+      {
+        "command": "alwaysonTools.addServer",
+        "title": "Connect to a Server",
+        "category": "AlwaysOn Tools",
+        "icon": "$(add)"
+      },
+      {
+        "command": "alwaysonTools.refresh",
+        "title": "Refresh",
+        "category": "AlwaysOn Tools",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "alwaysonTools.removeServer",
+        "title": "Remove Server",
+        "category": "AlwaysOn Tools",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "alwaysonTools.reconnect",
+        "title": "Reconnect",
+        "category": "AlwaysOn Tools",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "alwaysonTools.configureRoutingList",
+        "title": "Configure Read-Only Routing List...",
+        "category": "AlwaysOn Tools",
+        "icon": "$(list-ordered)"
+      },
+      {
+        "command": "alwaysonTools.configureRoutingUrl",
+        "title": "Configure Read-Only Routing URL...",
+        "category": "AlwaysOn Tools",
+        "icon": "$(link)"
+      },
+      {
+        "command": "alwaysonTools.clearServerList",
+        "title": "Clear Server List",
+        "category": "AlwaysOn Tools"
+      },
+      {
+        "command": "alwaysonTools.about",
+        "title": "About",
+        "category": "AlwaysOn Tools"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "alwaysonTools.addServer",
+          "when": "view == alwaysonTools.servers",
+          "group": "navigation@1"
+        },
+        {
+          "command": "alwaysonTools.refresh",
+          "when": "view == alwaysonTools.servers",
+          "group": "navigation@2"
+        },
+        {
+          "command": "alwaysonTools.clearServerList",
+          "when": "view == alwaysonTools.servers",
+          "group": "1_manage"
+        },
+        {
+          "command": "alwaysonTools.about",
+          "when": "view == alwaysonTools.servers",
+          "group": "9_about"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "alwaysonTools.reconnect",
+          "when": "view == alwaysonTools.servers && viewItem == server",
+          "group": "inline@1"
+        },
+        {
+          "command": "alwaysonTools.removeServer",
+          "when": "view == alwaysonTools.servers && viewItem == server",
+          "group": "inline@2"
+        },
+        {
+          "command": "alwaysonTools.removeServer",
+          "when": "view == alwaysonTools.servers && viewItem == server",
+          "group": "1_manage"
+        },
+        {
+          "command": "alwaysonTools.configureRoutingList",
+          "when": "view == alwaysonTools.servers && viewItem == replica",
+          "group": "inline@1"
+        },
+        {
+          "command": "alwaysonTools.configureRoutingList",
+          "when": "view == alwaysonTools.servers && viewItem == replica",
+          "group": "1_configure@1"
+        },
+        {
+          "command": "alwaysonTools.configureRoutingUrl",
+          "when": "view == alwaysonTools.servers && viewItem == replica",
+          "group": "1_configure@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "alwaysonTools.removeServer",
+          "when": "false"
+        },
+        {
+          "command": "alwaysonTools.reconnect",
+          "when": "false"
+        },
+        {
+          "command": "alwaysonTools.configureRoutingList",
+          "when": "false"
+        },
+        {
+          "command": "alwaysonTools.configureRoutingUrl",
+          "when": "false"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "mssql": "^11.0.1"
+  },
+  "devDependencies": {
+    "@types/mssql": "^9.1.5",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}
