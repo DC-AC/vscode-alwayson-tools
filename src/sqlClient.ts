@@ -169,6 +169,35 @@ export class SqlClient {
     };
   }
 
+  /** Whether the current login is a member of the sysadmin fixed server role. */
+  async isSysadmin(profileId: string): Promise<boolean> {
+    const rows = await this.executor(profileId).rows(
+      "select IS_SRVROLEMEMBER('sysadmin') as IsSysadmin"
+    );
+    return Number(rows[0]?.IsSysadmin) === 1;
+  }
+
+  /**
+   * The connected machine's primary DNS domain, read from the registry via
+   * xp_regread (as the original tool did). Used to suggest a routing-URL FQDN.
+   * Returns null if it cannot be determined (e.g. insufficient permission).
+   */
+  async getMachineDomain(profileId: string): Promise<string | null> {
+    try {
+      const rows = await this.executor(profileId).rows(
+        'DECLARE @Domain varchar(512), @key varchar(100)\n' +
+          "SET @key = 'SYSTEM\\ControlSet001\\Services\\Tcpip\\Parameters\\'\n" +
+          "EXEC master..xp_regread @rootkey='HKEY_LOCAL_MACHINE', @key=@key, " +
+          "@value_name='Domain', @value=@Domain OUTPUT\n" +
+          'select @Domain as domain'
+      );
+      const domain = rows[0]?.domain;
+      return domain ? String(domain) : null;
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * Availability groups for which the connected instance is currently the
    * PRIMARY replica. Read-only routing changes (ALTER AVAILABILITY GROUP ...

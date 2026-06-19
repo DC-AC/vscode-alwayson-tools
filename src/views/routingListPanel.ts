@@ -138,10 +138,23 @@ async function ensureRoutingUrl(
     return false;
   }
 
+  // Suggest an FQDN using the domain read from the server's registry (the
+  // domain is the connected primary's; ask the user to confirm it applies).
+  let suggested = replicaName;
+  let promptText =
+    'Fully qualified domain name for the replica (recommended over the bare server name)';
+  if (!replicaName.includes('.')) {
+    const domain = await client.getMachineDomain(profile.id).catch(() => null);
+    if (domain) {
+      suggested = `${replicaName}.${domain}`;
+      promptText = `Auto-detected domain "${domain}". Confirm or edit the full routing FQDN (it must resolve to ${replicaName}).`;
+    }
+  }
+
   const fqdn = await vscode.window.showInputBox({
     title: `Read-Only Routing URL for ${replicaName}`,
-    prompt: 'Fully qualified domain name for the replica (recommended over the bare server name)',
-    value: replicaName,
+    prompt: promptText,
+    value: suggested,
     ignoreFocusOut: true,
     validateInput: (v) => (v.trim() ? undefined : 'A host name is required')
   });

@@ -164,6 +164,7 @@ async function connectAndRegister(
         await store.upsert(profile, profile.fromConnectionString ? connectionString : password);
         tree.refresh();
         vscode.window.showInformationMessage(`Connected to ${profile.server}.`);
+        await warnIfNotSysadmin(client, profile.id);
       } catch (err) {
         vscode.window.showErrorMessage(`Connection failed: ${errMessage(err)}`);
       }
@@ -249,6 +250,23 @@ async function addServerManual(
   await connectAndRegister(store, client, tree, profile, password);
 }
 
+/**
+ * Read-only routing changes require sysadmin, so warn (non-blocking) if the
+ * connected login is not a member of the sysadmin fixed server role.
+ */
+async function warnIfNotSysadmin(client: SqlClient, profileId: string): Promise<void> {
+  try {
+    if (!(await client.isSysadmin(profileId))) {
+      vscode.window.showWarningMessage(
+        'You are not a member of the sysadmin fixed server role on this instance. ' +
+          'Configuring read-only routing requires sysadmin, so changes will fail until you connect with a sysadmin login.'
+      );
+    }
+  } catch {
+    /* don't block on the permission probe */
+  }
+}
+
 function promptPassword(): Thenable<string | undefined> {
   return vscode.window.showInputBox({
     title: 'Password',
@@ -291,6 +309,7 @@ async function reconnect(
           await client.connect(profile, password);
         }
         tree.refresh();
+        await warnIfNotSysadmin(client, profile.id);
       } catch (err) {
         vscode.window.showErrorMessage(`Connection failed: ${errMessage(err)}`);
       }
@@ -539,6 +558,7 @@ async function configureFromObjectExplorer(
           );
           return false;
         }
+        await warnIfNotSysadmin(client, profile.id);
         return true;
       } catch (err) {
         vscode.window.showErrorMessage(`Connection failed: ${errMessage(err)}`);
