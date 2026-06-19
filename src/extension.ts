@@ -36,7 +36,11 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('alwaysonTools.clearServerList', () =>
       clearServerList(store, client, tree)
     ),
-    vscode.commands.registerCommand('alwaysonTools.about', about)
+    vscode.commands.registerCommand('alwaysonTools.about', about),
+    vscode.commands.registerCommand(
+      'alwaysonTools.configureFromObjectExplorer',
+      (node?: unknown) => configureFromObjectExplorer(context, store, client, tree, node)
+    )
   );
 }
 
@@ -264,13 +268,25 @@ async function configureRoutingList(
   if (!node || node.kind !== 'replica' || !node.agName || !node.replicaName) {
     return;
   }
+  await openRoutingList(context, client, tree, node.profile, node.agName, node.replicaName);
+}
+
+/** Reusable: open the routing-list editor for a (profile, AG, replica). */
+async function openRoutingList(
+  context: vscode.ExtensionContext,
+  client: SqlClient,
+  tree: AlwaysOnTreeProvider,
+  profile: ConnectionProfile,
+  agName: string,
+  replicaName: string
+): Promise<void> {
   try {
     await RoutingListPanel.show(
       context,
       client,
-      node.profile,
-      node.agName,
-      node.replicaName,
+      profile,
+      agName,
+      replicaName,
       () => tree.refresh()
     );
   } catch (err) {
@@ -286,10 +302,18 @@ async function configureRoutingUrl(
   if (!node || node.kind !== 'replica' || !node.agName || !node.replicaName) {
     return;
   }
-  const agName = node.agName;
-  const replicaName = node.replicaName;
+  await runRoutingUrl(client, tree, node.profile, node.agName, node.replicaName);
+}
 
-  const existing = await client.getRoutingUrl(node.profile.id, agName, replicaName).catch(() => null);
+/** Reusable: the routing-URL prompt/apply flow for a (profile, AG, replica). */
+async function runRoutingUrl(
+  client: SqlClient,
+  tree: AlwaysOnTreeProvider,
+  profile: ConnectionProfile,
+  agName: string,
+  replicaName: string
+): Promise<void> {
+  const existing = await client.getRoutingUrl(profile.id, agName, replicaName).catch(() => null);
 
   const fqdn = await vscode.window.showInputBox({
     title: `Read-Only Routing URL for ${replicaName}`,
@@ -350,7 +374,7 @@ async function configureRoutingUrl(
   }
 
   try {
-    await client.execute(node.profile.id, script);
+    await client.execute(profile.id, script);
     vscode.window.showInformationMessage(`Read-only routing URL configured for ${replicaName}.`);
     tree.refresh();
   } catch (err) {
@@ -366,6 +390,163 @@ function extractHost(url: string): string {
 function extractPort(url: string): string {
   const m = /TCP:\/\/(.+):(\d+)/i.exec(url);
   return m ? m[2] : '1433';
+}
+
+// ---------------------------------------------------------------------------
+// Integration with the Microsoft SQL Server (ms-mssql.mssql) Object Explorer.
+// Invoked from the server right-click menu in that extension's tree. The node
+// argument is mssql's tree node; we read its connectionProfile defensively
+// since its exact shape is not a documented contract.
+// ---------------------------------------------------------------------------
+
+interface MssqlConnectionInfo {
+  server?: string;
+  authenticationType?: string; // 'Integrated' | 'SqlLogin' | 'AzureMFA'
+  user?: string;
+  password?: string;
+}
+
+function readMssqlConnection(node: any): MssqlConnectionInfo | undefined {
+  const profile =
+    node?.connectionProfile ??
+    node?.connectionInfo ??
+    node?.sqlConnectionInfo ??
+    node?.connection;
+  if (profile && typeof profile.server === 'string') {
+    return profile as MssqlConnectionInfo;
+  }
+  return undefined;
+}
+
+function mapMssqlAuth(authenticationType?: string): AuthType {
+  switch (authenticationType) {
+    case 'Integrated':
+      return 'windows';
+    case 'AzureMFA':
+      return 'entra-integrated';
+    case 'SqlLogin':
+    default:
+      return 'sql';
+  }
+}
+
+async function configureFromObjectExplorer(
+  context: vscode.ExtensionContext,
+  store: ProfileStore,
+  client: SqlClient,
+  tree: AlwaysOnTreeProvider,
+  node?: unknown
+): Promise<void> {
+  const conn = readMssqlConnection(node);
+  if (!conn || !conn.server) {
+    vscode.window.showErrorMessage(
+      'Could not read the connection details from the selected SQL Server node.'
+    );
+    return;
+  }
+  const server = conn.server;
+
+  // Reuse a saved profile for this server if we have one (it carries a stored
+  // password); otherwise derive one from the mssql node.
+  let profile = store
+    .getAll()
+    .find((p) => p.server.toLowerCase() === server.toLowerCase());
+  let password: string | undefined;
+
+  if (profile) {
+    password = await store.getPassword(profile.id);
+  } else {
+    const authType = mapMssqlAuth(conn.authenticationType);
+    profile = {
+      id: `${server}::${authType}::${conn.user ?? ''}`,
+      server,
+      authType,
+      userName: conn.user,
+      encrypt: authType.startsWith('entra'),
+      trustServerCertificate: !authType.startsWith('entra')
+    };
+    password = conn.password;
+  }
+
+  const needsPassword =
+    profile.authType === 'sql' || profile.authType === 'windows' || profile.authType === 'entra-password';
+  if (needsPassword && !password) {
+    if (profile.authType === 'windows') {
+      vscode.window.showWarningMessage(
+        'Windows authentication requires a domain password. Connect this server once via "AlwaysOn Tools: Connect to a Server" to save the credential.'
+      );
+      return;
+    }
+    password = await promptPassword();
+    if (password === undefined) {
+      return;
+    }
+  }
+
+  const ok = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: `Connecting to ${server}...` },
+    async () => {
+      try {
+        await client.connect(profile!, password);
+        const info = await client.getServerInfo(profile!.id);
+        if (info.majorVersion < 11 || !info.isHadrEnabled) {
+          vscode.window.showErrorMessage(
+            'This instance is not a SQL Server 2012+ instance with AlwaysOn Availability Groups enabled.'
+          );
+          return false;
+        }
+        await store.upsert(profile!, password);
+        tree.refresh();
+        return true;
+      } catch (err) {
+        vscode.window.showErrorMessage(`Connection failed: ${errMessage(err)}`);
+        return false;
+      }
+    }
+  );
+  if (!ok) {
+    return;
+  }
+
+  // Guided pick: Availability Group -> replica -> action.
+  const ags = await client.getAvailabilityGroups(profile.id);
+  if (ags.length === 0) {
+    vscode.window.showInformationMessage('This instance has no AlwaysOn Availability Groups.');
+    return;
+  }
+  const agName = ags.length === 1 ? ags[0] : await vscode.window.showQuickPick(ags, {
+    title: 'Select an Availability Group',
+    ignoreFocusOut: true
+  });
+  if (!agName) {
+    return;
+  }
+
+  const replicas = await client.getReplicas(profile.id, agName);
+  const replicaName = await vscode.window.showQuickPick(replicas, {
+    title: `Select a replica in ${agName}`,
+    ignoreFocusOut: true
+  });
+  if (!replicaName) {
+    return;
+  }
+
+  const action = await vscode.window.showQuickPick(
+    [
+      { label: '$(list-ordered) Configure Read-Only Routing List...', value: 'list' },
+      { label: '$(link) Configure Read-Only Routing URL...', value: 'url' }
+    ],
+    { title: `${replicaName}`, ignoreFocusOut: true }
+  );
+  if (!action) {
+    return;
+  }
+
+  if (action.value === 'list') {
+    await openRoutingList(context, client, tree, profile, agName, replicaName);
+  } else {
+    await runRoutingUrl(client, tree, profile, agName, replicaName);
+  }
 }
 
 function about(): void {

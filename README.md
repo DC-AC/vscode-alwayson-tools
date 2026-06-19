@@ -37,6 +37,15 @@ Passwords are stored in the VS Code **SecretStorage**; server profiles are store
    - **Configure Read-Only Routing List…** — opens the routing-list editor.
    - **Configure Read-Only Routing URL…** — sets the `TCP://` routing URL.
 
+## SQL Server extension integration
+
+If the Microsoft **SQL Server (ms-mssql.mssql)** extension is installed, **right-click a connected server** in its Object Explorer and choose **"Configure AlwaysOn Read-Only Routing…"**. This opens a guided flow (Availability Group → replica → routing list / routing URL).
+
+Notes:
+
+- The server name and authentication type are read from the SQL Server extension's connection, but its password is not shared. For SQL/Windows auth, the routing tool reuses a credential you've already saved by connecting that server once through **AlwaysOn Tools: Connect to a Server**; otherwise it prompts (SQL/Entra). Windows-integrated requires connecting through this extension first to capture the domain password.
+- The menu hook relies on the SQL Server extension's internal node `contextValue`, which is not a documented API and could change in a future release of that extension.
+
 ## Development
 
 ```bash

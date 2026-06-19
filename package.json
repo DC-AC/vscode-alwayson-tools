@@ -91,6 +91,12 @@
         "command": "alwaysonTools.about",
         "title": "About",
         "category": "AlwaysOn Tools"
+      },
+      {
+        "command": "alwaysonTools.configureFromObjectExplorer",
+        "title": "Configure AlwaysOn Read-Only Routing...",
+        "category": "AlwaysOn Tools",
+        "icon": "media/icon.svg"
       }
     ],
     "menus": {
@@ -146,9 +152,18 @@
           "command": "alwaysonTools.configureRoutingUrl",
           "when": "view == alwaysonTools.servers && viewItem == replica",
           "group": "1_configure@2"
+        },
+        {
+          "command": "alwaysonTools.configureFromObjectExplorer",
+          "when": "view == objectExplorer && viewItem =~ /\\btype=Server\\b/ && !(viewItem =~ /\\btype=Database\\b/)",
+          "group": "alwaysonTools@1"
         }
       ],
       "commandPalette": [
+        {
+          "command": "alwaysonTools.configureFromObjectExplorer",
+          "when": "false"
+        },
         {
           "command": "alwaysonTools.removeServer",
           "when": "false"
