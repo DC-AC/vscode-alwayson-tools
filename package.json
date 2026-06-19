@@ -20,6 +20,9 @@
   ],
   "activationEvents": [],
   "main": "./out/extension.js",
+  "extensionDependencies": [
+    "ms-mssql.mssql"
+  ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [

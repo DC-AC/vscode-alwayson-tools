@@ -13,6 +13,10 @@ Configure **SQL Server AlwaysOn Availability Group read-only routing** without l
 
 The tool validates on connect that the instance is SQL Server 2012+ with HADR enabled, mirroring the original application.
 
+## Requirements
+
+This extension depends on the Microsoft **SQL Server (ms-mssql.mssql)** extension (declared via `extensionDependencies`), so VS Code installs and enables it automatically. It provides the connection dialog and the connection-sharing API that lets AlwaysOn Tools reuse your existing connections for every authentication type without re-authenticating.
+
 ## Authentication
 
 All authentication modes the original supported, plus Microsoft Entra:
@@ -31,7 +35,7 @@ Passwords are stored in the VS Code **SecretStorage**; server profiles are store
 ## Usage
 
 1. Open the **AlwaysOn Tools** view in the activity bar.
-2. Click **Connect to a Server**. If the Microsoft **SQL Server (ms-mssql.mssql)** extension is installed, this reuses *its* connection picker (select an existing connection or create a new one) so the experience matches that extension; otherwise it falls back to built-in prompts. When you pick a **saved** connection, the routing tool reuses the SQL Server extension's own connection (via the connection-sharing API), so **all authentication types work — including Windows-integrated and Entra-MFA — with no re-authentication**. A brand-new connection that isn't saved yet falls back to this extension's own engine (SQL and Entra-password).
+2. Click **Connect to a Server**. This reuses the SQL Server extension's connection picker (select an existing connection or create a new one) so the experience matches that extension. When you pick a **saved** connection, the routing tool reuses the SQL Server extension's own connection (via the connection-sharing API), so **all authentication types work — including Windows-integrated and Entra-MFA — with no re-authentication**. A brand-new connection that isn't saved yet falls back to this extension's own engine (SQL and Entra-password). *(A built-in prompt fallback also exists as a safety net if the SQL Server extension is ever unavailable.)*
 3. Expand the server → Availability Group → replica.
 4. Right-click a replica:
    - **Configure Read-Only Routing List…** — opens the routing-list editor.
