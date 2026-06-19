@@ -41,10 +41,12 @@ Passwords are stored in the VS Code **SecretStorage**; server profiles are store
 
 If the Microsoft **SQL Server (ms-mssql.mssql)** extension is installed, **right-click a connected server** in its Object Explorer and choose **"Configure AlwaysOn Read-Only Routing…"**. This opens a guided flow (Availability Group → replica → routing list / routing URL).
 
+This reuses the SQL Server extension's **own existing connection** through its public *connection-sharing* API — so **no credentials are re-entered**, including Windows-integrated and Entra MFA connections that this extension cannot establish on its own. The first time, the SQL Server extension asks you to approve connection sharing with AlwaysOn Tools.
+
 Notes:
 
-- The server name and authentication type are read from the SQL Server extension's connection, but its password is not shared. For SQL/Windows auth, the routing tool reuses a credential you've already saved by connecting that server once through **AlwaysOn Tools: Connect to a Server**; otherwise it prompts (SQL/Entra). Windows-integrated requires connecting through this extension first to capture the domain password.
-- The menu hook relies on the SQL Server extension's internal node `contextValue`, which is not a documented API and could change in a future release of that extension.
+- The menu hook relies on the SQL Server extension's internal node `contextValue` (`type=Server`), which is not a documented API and could change in a future release of that extension.
+- Connection sharing requires a reasonably recent version of the SQL Server extension (the `connectionSharing` API). If it is unavailable, use **AlwaysOn Tools: Connect to a Server** in the AlwaysOn Tools view instead.
 
 ## Development
 

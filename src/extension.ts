@@ -5,6 +5,7 @@ import { SqlClient } from './sqlClient';
 import { AlwaysOnTreeProvider, TreeNode, errMessage } from './tree/treeProvider';
 import { RoutingListPanel } from './views/routingListPanel';
 import { buildRoutingUrlScript } from './scripts';
+import { openSharedConnection } from './mssqlSharing';
 
 export function activate(context: vscode.ExtensionContext): void {
   const store = new ProfileStore(context);
@@ -399,104 +400,62 @@ function extractPort(url: string): string {
 // since its exact shape is not a documented contract.
 // ---------------------------------------------------------------------------
 
-interface MssqlConnectionInfo {
-  server?: string;
-  authenticationType?: string; // 'Integrated' | 'SqlLogin' | 'AzureMFA'
-  user?: string;
-  password?: string;
-}
-
-function readMssqlConnection(node: any): MssqlConnectionInfo | undefined {
+function readMssqlNode(node: any): { connectionId?: string; server?: string } {
   const profile =
     node?.connectionProfile ??
     node?.connectionInfo ??
     node?.sqlConnectionInfo ??
     node?.connection;
-  if (profile && typeof profile.server === 'string') {
-    return profile as MssqlConnectionInfo;
-  }
-  return undefined;
-}
-
-function mapMssqlAuth(authenticationType?: string): AuthType {
-  switch (authenticationType) {
-    case 'Integrated':
-      return 'windows';
-    case 'AzureMFA':
-      return 'entra-integrated';
-    case 'SqlLogin':
-    default:
-      return 'sql';
-  }
+  return {
+    connectionId: typeof profile?.id === 'string' ? profile.id : undefined,
+    server: typeof profile?.server === 'string' ? profile.server : undefined
+  };
 }
 
 async function configureFromObjectExplorer(
   context: vscode.ExtensionContext,
-  store: ProfileStore,
+  _store: ProfileStore,
   client: SqlClient,
   tree: AlwaysOnTreeProvider,
   node?: unknown
 ): Promise<void> {
-  const conn = readMssqlConnection(node);
-  if (!conn || !conn.server) {
+  const { connectionId, server } = readMssqlNode(node);
+  if (!connectionId) {
     vscode.window.showErrorMessage(
-      'Could not read the connection details from the selected SQL Server node.'
+      'Could not read the connection from the selected SQL Server node. Make sure the server is connected in the SQL Server extension.'
     );
     return;
   }
-  const server = conn.server;
 
-  // Reuse a saved profile for this server if we have one (it carries a stored
-  // password); otherwise derive one from the mssql node.
-  let profile = store
-    .getAll()
-    .find((p) => p.server.toLowerCase() === server.toLowerCase());
-  let password: string | undefined;
-
-  if (profile) {
-    password = await store.getPassword(profile.id);
-  } else {
-    const authType = mapMssqlAuth(conn.authenticationType);
-    profile = {
-      id: `${server}::${authType}::${conn.user ?? ''}`,
-      server,
-      authType,
-      userName: conn.user,
-      encrypt: authType.startsWith('entra'),
-      trustServerCertificate: !authType.startsWith('entra')
-    };
-    password = conn.password;
-  }
-
-  const needsPassword =
-    profile.authType === 'sql' || profile.authType === 'windows' || profile.authType === 'entra-password';
-  if (needsPassword && !password) {
-    if (profile.authType === 'windows') {
-      vscode.window.showWarningMessage(
-        'Windows authentication requires a domain password. Connect this server once via "AlwaysOn Tools: Connect to a Server" to save the credential.'
-      );
-      return;
-    }
-    password = await promptPassword();
-    if (password === undefined) {
-      return;
-    }
-  }
+  // Reuse the SQL Server extension's existing connection (no credentials
+  // needed) via its connection-sharing API, registered under a synthetic id.
+  const profile: ConnectionProfile = {
+    id: `mssql-shared::${connectionId}`,
+    server: server ?? 'SQL Server',
+    authType: 'sql',
+    encrypt: false,
+    trustServerCertificate: true
+  };
 
   const ok = await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: `Connecting to ${server}...` },
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `Connecting to ${profile.server} via the SQL Server extension...`
+    },
     async () => {
       try {
-        await client.connect(profile!, password);
-        const info = await client.getServerInfo(profile!.id);
+        const shared = await openSharedConnection(connectionId);
+        if (!shared) {
+          return false; // openSharedConnection surfaced its own message.
+        }
+        client.registerShared(profile.id, shared);
+        const info = await client.getServerInfo(profile.id);
         if (info.majorVersion < 11 || !info.isHadrEnabled) {
           vscode.window.showErrorMessage(
             'This instance is not a SQL Server 2012+ instance with AlwaysOn Availability Groups enabled.'
           );
           return false;
         }
-        await store.upsert(profile!, password);
-        tree.refresh();
         return true;
       } catch (err) {
         vscode.window.showErrorMessage(`Connection failed: ${errMessage(err)}`);

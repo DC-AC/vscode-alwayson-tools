@@ -1,0 +1,97 @@
+import * as vscode from 'vscode';
+import { SharedConnection } from './sqlClient';
+
+/** Our own extension id, required by the mssql connection-sharing API. */
+export const EXTENSION_ID = 'dcac.alwayson-tools';
+
+const MSSQL_EXTENSION_ID = 'ms-mssql.mssql';
+
+// Minimal shapes from the public vscode-mssql connection-sharing API. We define
+// only what we use rather than taking a dependency on the typings package.
+interface DbCellValue {
+  displayValue: string;
+  isNull: boolean;
+}
+interface IDbColumn {
+  columnName: string;
+}
+interface SimpleExecuteResult {
+  rowCount: number;
+  columnInfo: IDbColumn[];
+  rows: DbCellValue[][];
+}
+interface IConnectionSharingService {
+  connect(extensionId: string, connectionId: string, database?: string): Promise<string | undefined>;
+  disconnect(connectionUri: string): void;
+  isConnected(connectionUri: string): boolean;
+  executeSimpleQuery(connectionUri: string, queryString: string): Promise<SimpleExecuteResult>;
+  editConnectionSharingPermissions(extensionId: string): Promise<'approved' | 'denied' | undefined>;
+}
+interface IMssqlExtension {
+  connectionSharing?: IConnectionSharingService;
+}
+
+/** Whether the Microsoft SQL Server extension is installed. */
+export function isMssqlInstalled(): boolean {
+  return !!vscode.extensions.getExtension(MSSQL_EXTENSION_ID);
+}
+
+async function getSharingService(): Promise<IConnectionSharingService | undefined> {
+  const ext = vscode.extensions.getExtension<IMssqlExtension>(MSSQL_EXTENSION_ID);
+  if (!ext) {
+    return undefined;
+  }
+  const api = ext.isActive ? ext.exports : await ext.activate();
+  return api?.connectionSharing;
+}
+
+function mapResult(result: SimpleExecuteResult): Record<string, unknown>[] {
+  const columns = result.columnInfo.map((c) => c.columnName);
+  return result.rows.map((row) => {
+    const obj: Record<string, unknown> = {};
+    row.forEach((cell, i) => {
+      obj[columns[i]] = cell.isNull ? null : cell.displayValue;
+    });
+    return obj;
+  });
+}
+
+/**
+ * Open a shared connection to a saved mssql connection (by its connection id,
+ * which is the Object Explorer node's connectionProfile.id). The mssql
+ * extension prompts the user to approve connection sharing the first time.
+ * Returns undefined if sharing is unavailable or not approved.
+ */
+export async function openSharedConnection(connectionId: string): Promise<SharedConnection | undefined> {
+  const svc = await getSharingService();
+  if (!svc) {
+    return undefined;
+  }
+
+  let uri: string | undefined;
+  try {
+    uri = await svc.connect(EXTENSION_ID, connectionId, 'master');
+  } catch (err) {
+    // Most commonly a denied / not-yet-granted permission.
+    const choice = await vscode.window.showWarningMessage(
+      'The SQL Server extension declined to share this connection. Grant permission to AlwaysOn Tools?',
+      'Edit Permissions'
+    );
+    if (choice === 'Edit Permissions') {
+      await svc.editConnectionSharingPermissions(EXTENSION_ID);
+    }
+    return undefined;
+  }
+  if (!uri) {
+    return undefined;
+  }
+
+  const connectionUri = uri;
+  return {
+    isConnected: () => svc.isConnected(connectionUri),
+    rows: async (tsql: string) => mapResult(await svc.executeSimpleQuery(connectionUri, tsql)),
+    exec: async (tsql: string) => {
+      await svc.executeSimpleQuery(connectionUri, tsql);
+    }
+  };
+}
