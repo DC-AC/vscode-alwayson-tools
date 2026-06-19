@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { SqlClient, RoutingListEntry } from '../sqlClient';
 import { ConnectionProfile } from '../connection';
-import { buildRoutingListScript, buildRoutingUrlScript } from '../scripts';
+import { buildRoutingListScript, buildRoutingUrlStatement, routingUrl } from '../scripts';
 
 interface ReplicaItem {
   name: string;
@@ -56,21 +56,43 @@ export class RoutingListPanel {
       busy = true;
       try {
         const ordered: string[] = (msg.checked as string[]) ?? [];
+        const execute = msg.type === 'apply';
+
+        // Resolve a routing URL for every selected replica (existing URLs are
+        // read from the server; missing ones are prompted for). When applying,
+        // missing URLs are written to the server here.
+        const urlStatements = await resolveRoutingUrls(
+          client,
+          profile,
+          agName,
+          ordered,
+          panel,
+          execute
+        );
+        if (urlStatements === null) {
+          return; // user cancelled; resolveRoutingUrls handled unchecking
+        }
+
+        const listScript = buildRoutingListScript(agName, replicaName, ordered, !!msg.roundRobin);
 
         if (msg.type === 'generate') {
-          const script = buildRoutingListScript(agName, replicaName, ordered, !!msg.roundRobin);
-          const doc = await vscode.workspace.openTextDocument({ language: 'sql', content: script });
+          // Emit a self-contained script: each replica's routing URL first,
+          // then the primary's routing list.
+          const parts = [
+            '-- Read-only routing URLs for the read-only replicas',
+            ...urlStatements.map((s) => s + '\nGO'),
+            '-- Read-only routing list for the primary replica',
+            listScript + '\nGO'
+          ];
+          const doc = await vscode.workspace.openTextDocument({
+            language: 'sql',
+            content: parts.join('\n\n')
+          });
           await vscode.window.showTextDocument(doc, { preview: false });
           return;
         }
 
-        // apply — every selected replica must have a read-only routing URL
-        // first (SQL Server Msg 19404), so configure any that are missing.
-        const configured = await ensureRoutingUrls(client, profile, agName, ordered, panel);
-        if (!configured) {
-          return; // user cancelled; ensureRoutingUrls already unchecked them
-        }
-
+        // apply
         if (ordered.length === 0) {
           const choice = await vscode.window.showWarningMessage(
             'No read-only replicas are selected. This disables read-only routing for this replica. Continue?',
@@ -82,8 +104,7 @@ export class RoutingListPanel {
           }
         }
 
-        const script = buildRoutingListScript(agName, replicaName, ordered, !!msg.roundRobin);
-        await client.execute(profile.id, script);
+        await client.execute(profile.id, listScript);
         vscode.window.showInformationMessage(
           `Setting saved for Availability Group ${agName} replica ${replicaName}.`
         );
@@ -99,78 +120,80 @@ export class RoutingListPanel {
 }
 
 /**
- * Ensure every selected replica has a READ_ONLY_ROUTING_URL, configuring any
- * that are missing in a single sequential flow. Returns true if all selected
- * replicas now have a URL, false if the user cancelled (in which case the
- * still-missing replicas are unchecked in the editor).
+ * Resolve the READ_ONLY_ROUTING_URL for every selected replica and return the
+ * SECONDARY_ROLE statements (in selection order). Existing URLs are read from
+ * the server; replicas without one are prompted for in a single sequential
+ * flow. When `execute` is true, newly-entered URLs are written to the server
+ * immediately (Apply); otherwise nothing is written (Generate).
+ *
+ * Returns null if the user cancelled (still-missing replicas are unchecked).
  */
-async function ensureRoutingUrls(
+async function resolveRoutingUrls(
   client: SqlClient,
   profile: ConnectionProfile,
   agName: string,
   ordered: string[],
-  panel: vscode.WebviewPanel
-): Promise<boolean> {
+  panel: vscode.WebviewPanel,
+  execute: boolean
+): Promise<string[] | null> {
+  const urls = new Map<string, string>();
   const missing: string[] = [];
   for (const r of ordered) {
-    const url = await client.getRoutingUrl(profile.id, agName, r).catch(() => null);
-    if (!url) {
+    const existing = await client.getRoutingUrl(profile.id, agName, r).catch(() => null);
+    if (existing) {
+      urls.set(r, existing);
+    } else {
       missing.push(r);
     }
   }
-  if (missing.length === 0) {
-    return true;
-  }
 
-  const label =
-    missing.length === 1
-      ? `Replica '${missing[0]}' has`
-      : `${missing.length} selected replicas have`;
-  const choice = await vscode.window.showWarningMessage(
-    `${label} no read-only routing URL, which is required before ${missing.length === 1 ? 'it' : 'they'} can receive read-only connections:\n\n` +
-      missing.join('\n') +
-      `\n\nConfigure ${missing.length === 1 ? 'it' : 'them'} now?`,
-    { modal: true },
-    'Configure'
-  );
-  if (choice !== 'Configure') {
-    panel.webview.postMessage({ type: 'uncheck', replica: missing });
-    return false;
-  }
-
-  // Read the suggested domain once for the whole batch.
-  const domain = await client.getMachineDomain(profile.id).catch(() => null);
-
-  for (let i = 0; i < missing.length; i++) {
-    const ok = await promptAndSetRoutingUrl(
-      client,
-      profile,
-      agName,
-      missing[i],
-      domain,
-      i + 1,
-      missing.length
+  if (missing.length > 0) {
+    const label =
+      missing.length === 1
+        ? `Replica '${missing[0]}' has`
+        : `${missing.length} selected replicas have`;
+    const choice = await vscode.window.showWarningMessage(
+      `${label} no read-only routing URL, which is required before ${missing.length === 1 ? 'it' : 'they'} can receive read-only connections:\n\n` +
+        missing.join('\n') +
+        `\n\nConfigure ${missing.length === 1 ? 'it' : 'them'} now?`,
+      { modal: true },
+      'Configure'
     );
-    if (!ok) {
-      // User cancelled; uncheck the ones still without a URL and abort.
-      panel.webview.postMessage({ type: 'uncheck', replica: missing.slice(i) });
-      vscode.window.showWarningMessage('Apply cancelled — not all routing URLs were configured.');
-      return false;
+    if (choice !== 'Configure') {
+      panel.webview.postMessage({ type: 'uncheck', replica: missing });
+      return null;
+    }
+
+    // Read the suggested domain once for the whole batch.
+    const domain = await client.getMachineDomain(profile.id).catch(() => null);
+
+    for (let i = 0; i < missing.length; i++) {
+      const replica = missing[i];
+      const url = await promptRoutingUrl(replica, domain, i + 1, missing.length);
+      if (!url) {
+        // User cancelled; uncheck the ones still without a URL and abort.
+        panel.webview.postMessage({ type: 'uncheck', replica: missing.slice(i) });
+        vscode.window.showWarningMessage('Cancelled — not all routing URLs were configured.');
+        return null;
+      }
+      urls.set(replica, url);
+      if (execute) {
+        await client.execute(profile.id, buildRoutingUrlStatement(agName, replica, url));
+        vscode.window.showInformationMessage(`Read-only routing URL configured for ${replica}.`);
+      }
     }
   }
-  return true;
+
+  return ordered.map((r) => buildRoutingUrlStatement(agName, r, urls.get(r)!));
 }
 
-/** Prompt for one replica's routing URL (FQDN + port) and apply it. */
-async function promptAndSetRoutingUrl(
-  client: SqlClient,
-  profile: ConnectionProfile,
-  agName: string,
+/** Prompt for one replica's routing URL (FQDN + port). Returns the full URL. */
+async function promptRoutingUrl(
   replicaName: string,
   domain: string | null,
   position: number,
   total: number
-): Promise<boolean> {
+): Promise<string | null> {
   const step = total > 1 ? ` (${position} of ${total})` : '';
   const title = `Read-Only Routing URL for ${replicaName}${step}`;
 
@@ -189,7 +212,7 @@ async function promptAndSetRoutingUrl(
     validateInput: (v) => (v.trim() ? undefined : 'A host name is required')
   });
   if (!fqdn) {
-    return false;
+    return null;
   }
 
   const portStr = await vscode.window.showInputBox({
@@ -205,13 +228,10 @@ async function promptAndSetRoutingUrl(
     }
   });
   if (!portStr) {
-    return false;
+    return null;
   }
 
-  const script = buildRoutingUrlScript(agName, replicaName, fqdn.trim(), Number(portStr));
-  await client.execute(profile.id, script);
-  vscode.window.showInformationMessage(`Read-only routing URL configured for ${replicaName}.`);
-  return true;
+  return routingUrl(fqdn.trim(), Number(portStr));
 }
 
 /** Checked entries first (by priority), then unchecked candidates (by name). */

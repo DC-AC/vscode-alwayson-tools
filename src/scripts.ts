@@ -34,16 +34,30 @@ export function buildRoutingListScript(
   );
 }
 
-/** READ_ONLY_ROUTING_URL for a replica's SECONDARY role. */
+/** READ_ONLY_ROUTING_URL for a replica's SECONDARY role, from a full URL. */
+export function buildRoutingUrlStatement(
+  agName: string,
+  replicaServerName: string,
+  url: string
+): string {
+  return (
+    `ALTER AVAILABILITY GROUP [${agName}]\n` +
+    `MODIFY REPLICA ON '${replicaServerName}'\n` +
+    `WITH (SECONDARY_ROLE (READ_ONLY_ROUTING_URL='${url}'))`
+  );
+}
+
+/** Compose a TCP routing URL from an FQDN and port. */
+export function routingUrl(routingFqdn: string, tcpPort: number): string {
+  return `TCP://${routingFqdn}:${tcpPort}`;
+}
+
+/** READ_ONLY_ROUTING_URL for a replica's SECONDARY role, from FQDN + port. */
 export function buildRoutingUrlScript(
   agName: string,
   replicaServerName: string,
   routingFqdn: string,
   tcpPort: number
 ): string {
-  return (
-    `ALTER AVAILABILITY GROUP [${agName}]\n` +
-    `MODIFY REPLICA ON '${replicaServerName}'\n` +
-    `WITH (SECONDARY_ROLE (READ_ONLY_ROUTING_URL='TCP://${routingFqdn}:${tcpPort}'))`
-  );
+  return buildRoutingUrlStatement(agName, replicaServerName, routingUrl(routingFqdn, tcpPort));
 }
