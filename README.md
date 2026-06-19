@@ -1,4 +1,4 @@
-# AlwaysOn Read-Only Routing Configuration for VS Code
+# SQL AlwaysOn Read-Only Routing Configuration for VS Code
 
 Configure **SQL Server AlwaysOn Availability Group read-only routing** without leaving VS Code. This is a port of the Denny Cherry & Associates Consulting *AlwaysOn Tools* (originally a VB.NET WinForms app) to a VS Code extension.
 
