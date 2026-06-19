@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { SharedConnection } from './sqlClient';
 
 /** Our own extension id, required by the mssql connection-sharing API. */
-export const EXTENSION_ID = 'dcac.alwayson-read-only-routing';
+export const EXTENSION_ID = 'dcac.sql-read-only-routing-configuration';
 
 const MSSQL_EXTENSION_ID = 'ms-mssql.mssql';
 

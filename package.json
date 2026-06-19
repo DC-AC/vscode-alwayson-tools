@@ -1,5 +1,5 @@
 {
-  "name": "alwayson-read-only-routing",
+  "name": "sql-read-only-routing-configuration",
   "displayName": "AlwaysOn Read-Only Routing Configuration",
   "description": "Configure SQL Server AlwaysOn Availability Group read-only routing from VS Code.",
   "version": "1.0.0",
