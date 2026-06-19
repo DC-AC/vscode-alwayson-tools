@@ -31,7 +31,7 @@ Passwords are stored in the VS Code **SecretStorage**; server profiles are store
 ## Usage
 
 1. Open the **AlwaysOn Tools** view in the activity bar.
-2. Click **Connect to a Server**. If the Microsoft **SQL Server (ms-mssql.mssql)** extension is installed, this reuses *its* connection picker (select an existing connection or create a new one) so the experience matches that extension; otherwise it falls back to built-in prompts. Note that SQL and Entra-password connections complete through this extension's own engine, while Windows-integrated / Entra-MFA connections are best driven from the SQL Server extension's Object Explorer (see below), which needs no re-authentication.
+2. Click **Connect to a Server**. If the Microsoft **SQL Server (ms-mssql.mssql)** extension is installed, this reuses *its* connection picker (select an existing connection or create a new one) so the experience matches that extension; otherwise it falls back to built-in prompts. When you pick a **saved** connection, the routing tool reuses the SQL Server extension's own connection (via the connection-sharing API), so **all authentication types work — including Windows-integrated and Entra-MFA — with no re-authentication**. A brand-new connection that isn't saved yet falls back to this extension's own engine (SQL and Entra-password).
 3. Expand the server → Availability Group → replica.
 4. Right-click a replica:
    - **Configure Read-Only Routing List…** — opens the routing-list editor.

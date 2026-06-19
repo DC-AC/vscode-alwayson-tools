@@ -29,6 +29,11 @@ export interface ConnectionProfile {
   trustServerCertificate: boolean;
   /** When true, the stored secret is a full connection string, not a password. */
   fromConnectionString?: boolean;
+  /**
+   * When set, queries run through the Microsoft SQL Server extension's shared
+   * connection with this connection id (no credentials of our own needed).
+   */
+  sharedConnectionId?: string;
 }
 
 /** Build an mssql config object for a profile, given its (optional) password. */

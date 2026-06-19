@@ -66,6 +66,41 @@ export async function promptForMssqlConnection(): Promise<MssqlConnectionInfo | 
   return api.promptForConnection(true);
 }
 
+interface SavedConnection {
+  id?: string;
+  server?: string;
+  user?: string;
+  authenticationType?: string;
+}
+
+/**
+ * Match a picked connection back to its saved id in the SQL Server extension's
+ * `mssql.connections` setting, so it can be opened via the connection-sharing
+ * API. Returns undefined if no saved connection matches (e.g. a brand-new,
+ * unsaved connection).
+ */
+export function resolveSavedConnectionId(info: MssqlConnectionInfo): string | undefined {
+  const cfg = vscode.workspace
+    .getConfiguration('mssql')
+    .inspect<SavedConnection[]>('connections');
+  const all = [
+    ...(cfg?.globalValue ?? []),
+    ...(cfg?.workspaceValue ?? []),
+    ...(cfg?.workspaceFolderValue ?? [])
+  ];
+  const server = (info.server ?? '').toLowerCase();
+  const user = (info.user ?? '').toLowerCase();
+  const auth = info.authenticationType ?? '';
+  const match = all.find(
+    (c) =>
+      !!c.id &&
+      (c.server ?? '').toLowerCase() === server &&
+      (c.authenticationType ?? '') === auth &&
+      (c.user ?? '').toLowerCase() === user
+  );
+  return match?.id;
+}
+
 /** Whether the Microsoft SQL Server extension is installed. */
 export function isMssqlInstalled(): boolean {
   return !!vscode.extensions.getExtension(MSSQL_EXTENSION_ID);

@@ -9,6 +9,7 @@ import {
   openSharedConnection,
   isMssqlInstalled,
   promptForMssqlConnection,
+  resolveSavedConnectionId,
   MssqlConnectionInfo
 } from './mssqlSharing';
 
@@ -82,11 +83,84 @@ async function addServer(
     if (!connInfo) {
       return; // user cancelled
     }
+    // If this is a saved connection, reuse the SQL Server extension's own
+    // connection (works for all auth, including Windows-integrated, with no
+    // credentials). Otherwise fall back to connecting with our own engine.
+    const connId = resolveSavedConnectionId(connInfo);
+    if (connId) {
+      const connected = await connectViaSharing(store, client, tree, connInfo, connId);
+      if (connected) {
+        return;
+      }
+      // Sharing unavailable/denied — fall through to our own engine.
+    }
     const { profile, password, connectionString } = mssqlInfoToProfile(connInfo);
     await connectAndRegister(store, client, tree, profile, password, connectionString);
     return;
   }
   await addServerManual(store, client, tree);
+}
+
+/**
+ * Connect by reusing the SQL Server extension's shared connection (by saved
+ * connection id). Returns true on success, false if sharing was unavailable or
+ * declined (so the caller can fall back).
+ */
+async function connectViaSharing(
+  store: ProfileStore,
+  client: SqlClient,
+  tree: AlwaysOnTreeProvider,
+  info: MssqlConnectionInfo,
+  connectionId: string
+): Promise<boolean> {
+  const profile: ConnectionProfile = {
+    id: `mssql-shared::${connectionId}`,
+    server: info.server || 'SQL Server',
+    authType: mapMssqlAuthType(info.authenticationType),
+    userName: info.user || undefined,
+    encrypt: false,
+    trustServerCertificate: true,
+    sharedConnectionId: connectionId
+  };
+
+  return vscode.window.withProgress(
+    {
+      location: { viewId: 'alwaysonTools.servers' },
+      title: `Connecting to ${profile.server} via the SQL Server extension...`
+    },
+    async () => {
+      try {
+        const shared = await openSharedConnection(connectionId);
+        if (!shared) {
+          return false; // openSharedConnection surfaced its own message
+        }
+        client.registerShared(profile.id, shared);
+        const serverInfo = await client.getServerInfo(profile.id);
+        if (serverInfo.majorVersion < 11) {
+          await client.disconnect(profile.id);
+          vscode.window.showErrorMessage(
+            'This version of SQL Server does not support AlwaysOn Availability Groups (requires SQL Server 2012 or later).'
+          );
+          return true; // handled; don't fall back
+        }
+        if (!serverInfo.isHadrEnabled) {
+          await client.disconnect(profile.id);
+          vscode.window.showErrorMessage(
+            'AlwaysOn Availability Groups is not enabled on this instance.'
+          );
+          return true;
+        }
+        await store.upsert(profile);
+        tree.refresh();
+        vscode.window.showInformationMessage(`Connected to ${profile.server}.`);
+        await warnIfNotSysadmin(client, profile.id);
+        return true;
+      } catch (err) {
+        vscode.window.showErrorMessage(`Connection failed: ${errMessage(err)}`);
+        return true; // error already shown; don't double up with a fallback
+      }
+    }
+  );
 }
 
 /** Map a Microsoft connection-picker result onto our profile model. */
@@ -290,6 +364,32 @@ async function reconnect(
   if (!profile) {
     return;
   }
+
+  // Profiles backed by the SQL Server extension's shared connection reconnect
+  // through that extension, with no credentials of our own.
+  if (profile.sharedConnectionId) {
+    await vscode.window.withProgress(
+      {
+        location: { viewId: 'alwaysonTools.servers' },
+        title: `Connecting to ${profile.server} via the SQL Server extension...`
+      },
+      async () => {
+        try {
+          const shared = await openSharedConnection(profile.sharedConnectionId!);
+          if (!shared) {
+            return;
+          }
+          client.registerShared(profile.id, shared);
+          tree.refresh();
+          await warnIfNotSysadmin(client, profile.id);
+        } catch (err) {
+          vscode.window.showErrorMessage(`Connection failed: ${errMessage(err)}`);
+        }
+      }
+    );
+    return;
+  }
+
   const secret = await store.getPassword(profile.id);
   let password = secret;
   if (!profile.fromConnectionString && password === undefined && profile.authType !== 'entra-integrated') {
