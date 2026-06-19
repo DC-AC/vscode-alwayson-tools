@@ -588,7 +588,9 @@ async function configureFromObjectExplorer(
 
   const replicas = await client.getReplicas(profile.id, agName);
   const replicaName = await vscode.window.showQuickPick(replicas, {
-    title: `Select a replica in ${agName}`,
+    title: `Configure read-only routing for which primary replica in ${agName}?`,
+    placeHolder:
+      'Pick the replica to act as primary — you’ll set which replicas serve read-only traffic (and in what order) when it is primary',
     ignoreFocusOut: true
   });
   if (!replicaName) {
