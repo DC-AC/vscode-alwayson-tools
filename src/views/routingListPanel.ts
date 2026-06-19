@@ -42,117 +42,147 @@ export class RoutingListPanel {
       roundRobinAvailable
     );
 
+    // Serialize message handling: prompts must never overlap, or VS Code's
+    // single input box gets cancelled out from under the user.
+    let busy = false;
+
     panel.webview.onDidReceiveMessage(async (msg) => {
+      if (msg.type !== 'generate' && msg.type !== 'apply') {
+        return;
+      }
+      if (busy) {
+        return;
+      }
+      busy = true;
       try {
-        // A replica was just checked: it must have a read-only routing URL
-        // before it can be added to a routing list (SQL Server Msg 19404).
-        if (msg.type === 'check') {
-          const ok = await ensureRoutingUrl(client, profile, agName, msg.replica as string);
-          if (!ok) {
-            panel.webview.postMessage({ type: 'uncheck', replica: msg.replica });
-          }
+        const ordered: string[] = (msg.checked as string[]) ?? [];
+
+        if (msg.type === 'generate') {
+          const script = buildRoutingListScript(agName, replicaName, ordered, !!msg.roundRobin);
+          const doc = await vscode.workspace.openTextDocument({ language: 'sql', content: script });
+          await vscode.window.showTextDocument(doc, { preview: false });
           return;
         }
 
-        if (msg.type === 'generate' || msg.type === 'apply') {
-          const ordered: string[] = (msg.checked as string[]) ?? [];
-
-          if (msg.type === 'generate') {
-            const script = buildRoutingListScript(agName, replicaName, ordered, !!msg.roundRobin);
-            const doc = await vscode.workspace.openTextDocument({
-              language: 'sql',
-              content: script
-            });
-            await vscode.window.showTextDocument(doc, { preview: false });
-            return;
-          }
-
-          // apply — make sure every selected replica has a routing URL first.
-          const missing: string[] = [];
-          for (const r of ordered) {
-            const ok = await ensureRoutingUrl(client, profile, agName, r);
-            if (!ok) {
-              missing.push(r);
-            }
-          }
-          if (missing.length > 0) {
-            panel.webview.postMessage({ type: 'uncheck', replica: missing });
-            vscode.window.showErrorMessage(
-              `Not applied. These replicas have no read-only routing URL: ${missing.join(', ')}. ` +
-                'Configure a routing URL for each before adding it to the list.'
-            );
-            return;
-          }
-
-          const script = buildRoutingListScript(agName, replicaName, ordered, !!msg.roundRobin);
-
-          if (ordered.length === 0) {
-            const choice = await vscode.window.showWarningMessage(
-              'No read-only replicas are selected. This disables read-only routing for this replica. Continue?',
-              { modal: true },
-              'Yes'
-            );
-            if (choice !== 'Yes') {
-              return;
-            }
-          }
-          await client.execute(profile.id, script);
-          vscode.window.showInformationMessage(
-            `Setting saved for Availability Group ${agName} replica ${replicaName}.`
-          );
-          onApplied();
-          panel.dispose();
+        // apply — every selected replica must have a read-only routing URL
+        // first (SQL Server Msg 19404), so configure any that are missing.
+        const configured = await ensureRoutingUrls(client, profile, agName, ordered, panel);
+        if (!configured) {
+          return; // user cancelled; ensureRoutingUrls already unchecked them
         }
-      } catch (err) {
-        vscode.window.showErrorMessage(
-          err instanceof Error ? err.message : String(err)
+
+        if (ordered.length === 0) {
+          const choice = await vscode.window.showWarningMessage(
+            'No read-only replicas are selected. This disables read-only routing for this replica. Continue?',
+            { modal: true },
+            'Yes'
+          );
+          if (choice !== 'Yes') {
+            return;
+          }
+        }
+
+        const script = buildRoutingListScript(agName, replicaName, ordered, !!msg.roundRobin);
+        await client.execute(profile.id, script);
+        vscode.window.showInformationMessage(
+          `Setting saved for Availability Group ${agName} replica ${replicaName}.`
         );
+        onApplied();
+        panel.dispose();
+      } catch (err) {
+        vscode.window.showErrorMessage(err instanceof Error ? err.message : String(err));
+      } finally {
+        busy = false;
       }
     });
   }
 }
 
 /**
- * Ensure a replica has a READ_ONLY_ROUTING_URL; if not, offer to configure one
- * now (mirrors the original tool's prompt when checking a replica). Returns
- * true if the replica has a routing URL afterwards, false if the user declined.
+ * Ensure every selected replica has a READ_ONLY_ROUTING_URL, configuring any
+ * that are missing in a single sequential flow. Returns true if all selected
+ * replicas now have a URL, false if the user cancelled (in which case the
+ * still-missing replicas are unchecked in the editor).
  */
-async function ensureRoutingUrl(
+async function ensureRoutingUrls(
   client: SqlClient,
   profile: ConnectionProfile,
   agName: string,
-  replicaName: string
+  ordered: string[],
+  panel: vscode.WebviewPanel
 ): Promise<boolean> {
-  const existing = await client.getRoutingUrl(profile.id, agName, replicaName).catch(() => null);
-  if (existing) {
+  const missing: string[] = [];
+  for (const r of ordered) {
+    const url = await client.getRoutingUrl(profile.id, agName, r).catch(() => null);
+    if (!url) {
+      missing.push(r);
+    }
+  }
+  if (missing.length === 0) {
     return true;
   }
 
-  const configure = await vscode.window.showWarningMessage(
-    `Replica '${replicaName}' has not been configured for read-only routing. ` +
-      'It needs a READ_ONLY_ROUTING_URL before it can be added to a routing list. Configure it now?',
+  const label =
+    missing.length === 1
+      ? `Replica '${missing[0]}' has`
+      : `${missing.length} selected replicas have`;
+  const choice = await vscode.window.showWarningMessage(
+    `${label} no read-only routing URL, which is required before ${missing.length === 1 ? 'it' : 'they'} can receive read-only connections:\n\n` +
+      missing.join('\n') +
+      `\n\nConfigure ${missing.length === 1 ? 'it' : 'them'} now?`,
     { modal: true },
-    'Configure URL'
+    'Configure'
   );
-  if (configure !== 'Configure URL') {
+  if (choice !== 'Configure') {
+    panel.webview.postMessage({ type: 'uncheck', replica: missing });
     return false;
   }
 
-  // Suggest an FQDN using the domain read from the server's registry (the
-  // domain is the connected primary's; ask the user to confirm it applies).
-  let suggested = replicaName;
-  let promptText =
-    'Fully qualified domain name for the replica (recommended over the bare server name)';
-  if (!replicaName.includes('.')) {
-    const domain = await client.getMachineDomain(profile.id).catch(() => null);
-    if (domain) {
-      suggested = `${replicaName}.${domain}`;
-      promptText = `Auto-detected domain "${domain}". Confirm or edit the full routing FQDN (it must resolve to ${replicaName}).`;
+  // Read the suggested domain once for the whole batch.
+  const domain = await client.getMachineDomain(profile.id).catch(() => null);
+
+  for (let i = 0; i < missing.length; i++) {
+    const ok = await promptAndSetRoutingUrl(
+      client,
+      profile,
+      agName,
+      missing[i],
+      domain,
+      i + 1,
+      missing.length
+    );
+    if (!ok) {
+      // User cancelled; uncheck the ones still without a URL and abort.
+      panel.webview.postMessage({ type: 'uncheck', replica: missing.slice(i) });
+      vscode.window.showWarningMessage('Apply cancelled — not all routing URLs were configured.');
+      return false;
     }
+  }
+  return true;
+}
+
+/** Prompt for one replica's routing URL (FQDN + port) and apply it. */
+async function promptAndSetRoutingUrl(
+  client: SqlClient,
+  profile: ConnectionProfile,
+  agName: string,
+  replicaName: string,
+  domain: string | null,
+  position: number,
+  total: number
+): Promise<boolean> {
+  const step = total > 1 ? ` (${position} of ${total})` : '';
+  const title = `Read-Only Routing URL for ${replicaName}${step}`;
+
+  let suggested = replicaName;
+  let promptText = 'Fully qualified domain name for the replica (recommended over the bare server name)';
+  if (domain && !replicaName.includes('.')) {
+    suggested = `${replicaName}.${domain}`;
+    promptText = `Auto-detected domain "${domain}". Confirm or edit the full routing FQDN (it must resolve to ${replicaName}).`;
   }
 
   const fqdn = await vscode.window.showInputBox({
-    title: `Read-Only Routing URL for ${replicaName}`,
+    title,
     prompt: promptText,
     value: suggested,
     ignoreFocusOut: true,
@@ -163,8 +193,8 @@ async function ensureRoutingUrl(
   }
 
   const portStr = await vscode.window.showInputBox({
-    title: `Read-Only Routing URL for ${replicaName}`,
-    prompt: 'TCP port',
+    title,
+    prompt: `TCP port for ${fqdn.trim()}`,
     value: '1433',
     ignoreFocusOut: true,
     validateInput: (v) => {
@@ -261,7 +291,7 @@ function renderHtml(
 
   <ul id="list"></ul>
 
-  <div class="hint">Check the replicas to route read-only traffic to, in priority order. Use Move Up / Move Down to set priority.</div>
+  <div class="hint">Check the replicas to route read-only traffic to, in priority order. Use Move Up / Move Down to set priority. Any selected replica that has no read-only routing URL yet will be configured when you click Apply.</div>
 
   <div class="controls">
     <button id="apply">Apply to Server</button>
@@ -283,14 +313,7 @@ function renderHtml(
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.checked = it.checked;
-      cb.addEventListener('change', () => {
-        it.checked = cb.checked;
-        // When checking a replica, ask the extension to verify it has a
-        // routing URL (and offer to configure one if not).
-        if (cb.checked) {
-          vscode.postMessage({ type: 'check', replica: it.name });
-        }
-      });
+      cb.addEventListener('change', () => { it.checked = cb.checked; });
       const span = document.createElement('span');
       span.className = 'name';
       span.textContent = it.name;
