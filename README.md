@@ -1,6 +1,6 @@
-# SQL AlwaysOn Read-Only Routing Configuration for VS Code
+# SQL Always On Read-Only Routing Configuration for VS Code
 
-Configure **SQL Server AlwaysOn Availability Group read-only routing** without leaving VS Code. This is a port of the Denny Cherry & Associates Consulting *AlwaysOn Tools* (originally a VB.NET WinForms app) to a VS Code extension.
+Configure **SQL Server Always On Availability Group read-only routing** without leaving VS Code. This is a port of the Denny Cherry & Associates Consulting *AlwaysOn Tools* (originally a VB.NET WinForms app) to a VS Code extension.
 
 ## Features
 
@@ -34,7 +34,7 @@ Passwords are stored in the VS Code **SecretStorage**; server profiles are store
 
 ## Usage
 
-1. Open the **AlwaysOn Read-Only Routing** view in the activity bar.
+1. Open the **Always On Read-Only Routing** view in the activity bar.
 2. Click **Connect to a Server**. This reuses the SQL Server extension's connection picker (select an existing connection or create a new one) so the experience matches that extension. When you pick a **saved** connection, the routing tool reuses the SQL Server extension's own connection (via the connection-sharing API), so **all authentication types work — including Windows-integrated and Entra-MFA — with no re-authentication**. A brand-new connection that isn't saved yet falls back to this extension's own engine (SQL and Entra-password). *(A built-in prompt fallback also exists as a safety net if the SQL Server extension is ever unavailable.)*
 3. Expand the server → Availability Group → replica.
 4. Right-click a replica:
@@ -43,14 +43,14 @@ Passwords are stored in the VS Code **SecretStorage**; server profiles are store
 
 ## SQL Server extension integration
 
-If the Microsoft **SQL Server (ms-mssql.mssql)** extension is installed, **right-click a connected server** in its Object Explorer and choose **"Configure AlwaysOn Read-Only Routing…"**. This opens a guided flow (Availability Group → replica → routing list / routing URL).
+If the Microsoft **SQL Server (ms-mssql.mssql)** extension is installed, **right-click a connected server** in its Object Explorer and choose **"Configure Always On Read-Only Routing…"**. This opens a guided flow (Availability Group → replica → routing list / routing URL).
 
-This reuses the SQL Server extension's **own existing connection** through its public *connection-sharing* API — so **no credentials are re-entered**, including Windows-integrated and Entra MFA connections that this extension cannot establish on its own. The first time, the SQL Server extension asks you to approve connection sharing with AlwaysOn Read-Only Routing.
+This reuses the SQL Server extension's **own existing connection** through its public *connection-sharing* API — so **no credentials are re-entered**, including Windows-integrated and Entra MFA connections that this extension cannot establish on its own. The first time, the SQL Server extension asks you to approve connection sharing with Always On Read-Only Routing.
 
 Notes:
 
 - The menu hook relies on the SQL Server extension's internal node `contextValue` (`type=Server`), which is not a documented API and could change in a future release of that extension.
-- Connection sharing requires a reasonably recent version of the SQL Server extension (the `connectionSharing` API). If it is unavailable, use **AlwaysOn Read-Only Routing: Connect to a Server** in the AlwaysOn Read-Only Routing view instead.
+- Connection sharing requires a reasonably recent version of the SQL Server extension (the `connectionSharing` API). If it is unavailable, use **Always On Read-Only Routing: Connect to a Server** in the Always On Read-Only Routing view instead.
 
 ## Development
 
@@ -69,7 +69,7 @@ npx vsce package
 
 ## About DCAC
 
-**DCAC (Denny Cherry & Associates Consulting)** is a Microsoft data-platform consulting firm. We help organizations design, secure, migrate, and operate mission-critical SQL Server and Azure environments — covering high-availability architectures such as AlwaysOn Availability Groups, performance tuning, data security and compliance, cloud migration, and 24×7 managed database services.
+**DCAC (Denny Cherry & Associates Consulting)** is a Microsoft data-platform consulting firm. We help organizations design, secure, migrate, and operate mission-critical SQL Server and Azure environments — covering high-availability architectures such as Always On Availability Groups, performance tuning, data security and compliance, cloud migration, and 24×7 managed database services.
 
 ## License
 

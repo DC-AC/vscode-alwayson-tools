@@ -1,13 +1,20 @@
 # Changelog
 
-All notable changes to the **AlwaysOn Read-Only Routing Configuration** extension are documented here.
+All notable changes to the **SQL Always On Read-Only Routing Configuration** extension are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [1.0.1]
+
+### Changed
+
+- Use Microsoft's current spelling "Always On" (with a space) throughout the
+  display name, UI labels, and documentation.
 
 ## [1.0.0]
 
 Initial release — a VS Code port of the DCAC AlwaysOn Tools (originally a
-VB.NET WinForms app) for configuring SQL Server AlwaysOn Availability Group
+VB.NET WinForms app) for configuring SQL Server Always On Availability Group
 read-only routing.
 
 ### Added
@@ -24,6 +31,6 @@ read-only routing.
 - Validation on connect: SQL Server 2012+, HADR enabled, and a sysadmin warning.
 - All authentication types: SQL, Windows, and Microsoft Entra.
 - Integration with the Microsoft **SQL Server (ms-mssql.mssql)** extension:
-  - "Configure AlwaysOn Read-Only Routing…" on the Object Explorer server menu.
+  - "Configure Always On Read-Only Routing…" on the Object Explorer server menu.
   - The tree-view connect reuses the SQL Server extension's connection picker
     and shares its connections (all auth types, no re-authentication).

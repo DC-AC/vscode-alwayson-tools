@@ -1,8 +1,8 @@
 {
   "name": "sql-read-only-routing-configuration",
-  "displayName": "SQL AlwaysOn Read-Only Routing Configuration",
-  "description": "Configure SQL Server AlwaysOn Availability Group read-only routing from VS Code.",
-  "version": "1.0.0",
+  "displayName": "SQL Always On Read-Only Routing Configuration",
+  "description": "Configure SQL Server Always On Availability Group read-only routing from VS Code.",
+  "version": "1.0.1",
   "publisher": "dcac",
   "license": "MIT",
   "engines": {
@@ -41,7 +41,7 @@
       "activitybar": [
         {
           "id": "alwaysonTools",
-          "title": "AlwaysOn Read-Only Routing",
+          "title": "Always On Read-Only Routing",
           "icon": "media/icon.svg"
         }
       ]
@@ -58,60 +58,60 @@
     "viewsWelcome": [
       {
         "view": "alwaysonTools.servers",
-        "contents": "No SQL Server instances connected.\n[Connect to a Server](command:alwaysonTools.addServer)\n\nConnect to an AlwaysOn Availability Group listener or directly to the primary replica."
+        "contents": "No SQL Server instances connected.\n[Connect to a Server](command:alwaysonTools.addServer)\n\nConnect to an Always On Availability Group listener or directly to the primary replica."
       }
     ],
     "commands": [
       {
         "command": "alwaysonTools.addServer",
         "title": "Connect to a Server",
-        "category": "AlwaysOn Read-Only Routing",
+        "category": "Always On Read-Only Routing",
         "icon": "$(add)"
       },
       {
         "command": "alwaysonTools.refresh",
         "title": "Refresh",
-        "category": "AlwaysOn Read-Only Routing",
+        "category": "Always On Read-Only Routing",
         "icon": "$(refresh)"
       },
       {
         "command": "alwaysonTools.removeServer",
         "title": "Remove Server",
-        "category": "AlwaysOn Read-Only Routing",
+        "category": "Always On Read-Only Routing",
         "icon": "$(trash)"
       },
       {
         "command": "alwaysonTools.reconnect",
         "title": "Reconnect",
-        "category": "AlwaysOn Read-Only Routing",
+        "category": "Always On Read-Only Routing",
         "icon": "$(plug)"
       },
       {
         "command": "alwaysonTools.configureRoutingList",
         "title": "Configure Read-Only Routing List...",
-        "category": "AlwaysOn Read-Only Routing",
+        "category": "Always On Read-Only Routing",
         "icon": "$(list-ordered)"
       },
       {
         "command": "alwaysonTools.configureRoutingUrl",
         "title": "Configure Read-Only Routing URL...",
-        "category": "AlwaysOn Read-Only Routing",
+        "category": "Always On Read-Only Routing",
         "icon": "$(link)"
       },
       {
         "command": "alwaysonTools.clearServerList",
         "title": "Clear Server List",
-        "category": "AlwaysOn Read-Only Routing"
+        "category": "Always On Read-Only Routing"
       },
       {
         "command": "alwaysonTools.about",
         "title": "About",
-        "category": "AlwaysOn Read-Only Routing"
+        "category": "Always On Read-Only Routing"
       },
       {
         "command": "alwaysonTools.configureFromObjectExplorer",
-        "title": "Configure AlwaysOn Read-Only Routing...",
-        "category": "AlwaysOn Read-Only Routing",
+        "title": "Configure Always On Read-Only Routing...",
+        "category": "Always On Read-Only Routing",
         "icon": "media/icon.svg"
       }
     ],

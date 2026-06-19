@@ -19,7 +19,7 @@ function lit(s: string): string {
 }
 
 /**
- * Minimal query surface the AlwaysOn logic needs. Implemented either by a
+ * Minimal query surface the Always On logic needs. Implemented either by a
  * tedious connection pool (our own connection) or by the Microsoft SQL Server
  * extension's shared connection.
  */
@@ -81,7 +81,7 @@ class SharedExecutor implements Executor {
 }
 
 /**
- * Manages an Executor per server profile and exposes the AlwaysOn queries the
+ * Manages an Executor per server profile and exposes the Always On queries the
  * original tool ran against the sys.availability_* DMVs.
  */
 export class SqlClient {

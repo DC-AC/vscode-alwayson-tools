@@ -139,14 +139,14 @@ async function connectViaSharing(
         if (serverInfo.majorVersion < 11) {
           await client.disconnect(profile.id);
           vscode.window.showErrorMessage(
-            'This version of SQL Server does not support AlwaysOn Availability Groups (requires SQL Server 2012 or later).'
+            'This version of SQL Server does not support Always On Availability Groups (requires SQL Server 2012 or later).'
           );
           return true; // handled; don't fall back
         }
         if (!serverInfo.isHadrEnabled) {
           await client.disconnect(profile.id);
           vscode.window.showErrorMessage(
-            'AlwaysOn Availability Groups is not enabled on this instance.'
+            'Always On Availability Groups is not enabled on this instance.'
           );
           return true;
         }
@@ -221,14 +221,14 @@ async function connectAndRegister(
         if (info.majorVersion < 11) {
           await client.disconnect(profile.id);
           vscode.window.showErrorMessage(
-            'This version of SQL Server does not support AlwaysOn Availability Groups (requires SQL Server 2012 or later).'
+            'This version of SQL Server does not support Always On Availability Groups (requires SQL Server 2012 or later).'
           );
           return;
         }
         if (!info.isHadrEnabled) {
           await client.disconnect(profile.id);
           vscode.window.showErrorMessage(
-            'AlwaysOn Availability Groups is not enabled on this instance. Enable it and configure an Availability Group before using this tool.'
+            'Always On Availability Groups is not enabled on this instance. Enable it and configure an Availability Group before using this tool.'
           );
           return;
         }
@@ -654,7 +654,7 @@ async function configureFromObjectExplorer(
         const info = await client.getServerInfo(profile.id);
         if (info.majorVersion < 11 || !info.isHadrEnabled) {
           vscode.window.showErrorMessage(
-            'This instance is not a SQL Server 2012+ instance with AlwaysOn Availability Groups enabled.'
+            'This instance is not a SQL Server 2012+ instance with Always On Availability Groups enabled.'
           );
           return false;
         }
@@ -674,7 +674,7 @@ async function configureFromObjectExplorer(
   const ags = await client.getAvailabilityGroups(profile.id);
   if (ags.length === 0) {
     vscode.window.showInformationMessage(
-      'No AlwaysOn Availability Groups are primary on this instance. Connect to the primary replica (or the AG listener).'
+      'No Always On Availability Groups are primary on this instance. Connect to the primary replica (or the AG listener).'
     );
     return;
   }
@@ -717,6 +717,6 @@ async function configureFromObjectExplorer(
 
 function about(): void {
   vscode.window.showInformationMessage(
-    'AlwaysOn Read-Only Routing Configuration — a VS Code port of the Denny Cherry & Associates Consulting AlwaysOn Tools.'
+    'Always On Read-Only Routing Configuration — a VS Code port of the Denny Cherry & Associates Consulting AlwaysOn Tools.'
   );
 }
