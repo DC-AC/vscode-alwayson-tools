@@ -102,6 +102,18 @@ export class SqlClient {
     this.executors.set(profile.id, new TediousExecutor(pool));
   }
 
+  /** Open our own connection from a raw connection string (ADO.NET style). */
+  async connectWithString(profileId: string, connectionString: string): Promise<void> {
+    const existing = this.executors.get(profileId);
+    if (existing) {
+      await existing.close();
+      this.executors.delete(profileId);
+    }
+    const pool = new sql.ConnectionPool(connectionString);
+    await pool.connect();
+    this.executors.set(profileId, new TediousExecutor(pool));
+  }
+
   /** Register a connection owned by the mssql extension under a profile id. */
   registerShared(profileId: string, shared: SharedConnection): void {
     const existing = this.executors.get(profileId);

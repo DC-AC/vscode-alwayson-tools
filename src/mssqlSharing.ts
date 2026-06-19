@@ -27,8 +27,43 @@ interface IConnectionSharingService {
   executeSimpleQuery(connectionUri: string, queryString: string): Promise<SimpleExecuteResult>;
   editConnectionSharingPermissions(extensionId: string): Promise<'approved' | 'denied' | undefined>;
 }
+/** Subset of the mssql IConnectionInfo we map onto our ConnectionProfile. */
+export interface MssqlConnectionInfo {
+  server: string;
+  database?: string;
+  user?: string;
+  password?: string;
+  port?: number;
+  authenticationType?: string; // 'SqlLogin' | 'Integrated' | 'AzureMFA' | ...
+  encrypt?: string | boolean;
+  trustServerCertificate?: boolean;
+  connectionString?: string;
+}
+
 interface IMssqlExtension {
   connectionSharing?: IConnectionSharingService;
+  promptForConnection?(ignoreFocusOut?: boolean): Promise<MssqlConnectionInfo | undefined>;
+}
+
+async function getMssqlApi(): Promise<IMssqlExtension | undefined> {
+  const ext = vscode.extensions.getExtension<IMssqlExtension>(MSSQL_EXTENSION_ID);
+  if (!ext) {
+    return undefined;
+  }
+  return ext.isActive ? ext.exports : await ext.activate();
+}
+
+/**
+ * Show the Microsoft SQL Server extension's own connection picker (select an
+ * existing connection or create a new one) and return the chosen connection.
+ * Returns undefined if mssql is unavailable or the user cancelled.
+ */
+export async function promptForMssqlConnection(): Promise<MssqlConnectionInfo | undefined> {
+  const api = await getMssqlApi();
+  if (!api?.promptForConnection) {
+    return undefined;
+  }
+  return api.promptForConnection(true);
 }
 
 /** Whether the Microsoft SQL Server extension is installed. */
@@ -37,11 +72,7 @@ export function isMssqlInstalled(): boolean {
 }
 
 async function getSharingService(): Promise<IConnectionSharingService | undefined> {
-  const ext = vscode.extensions.getExtension<IMssqlExtension>(MSSQL_EXTENSION_ID);
-  if (!ext) {
-    return undefined;
-  }
-  const api = ext.isActive ? ext.exports : await ext.activate();
+  const api = await getMssqlApi();
   return api?.connectionSharing;
 }
 

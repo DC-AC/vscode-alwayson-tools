@@ -27,6 +27,8 @@ export interface ConnectionProfile {
   encrypt: boolean;
   /** Trust a self-signed server certificate. */
   trustServerCertificate: boolean;
+  /** When true, the stored secret is a full connection string, not a password. */
+  fromConnectionString?: boolean;
 }
 
 /** Build an mssql config object for a profile, given its (optional) password. */

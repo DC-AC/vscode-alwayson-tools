@@ -5,7 +5,12 @@ import { SqlClient } from './sqlClient';
 import { AlwaysOnTreeProvider, TreeNode, errMessage } from './tree/treeProvider';
 import { RoutingListPanel } from './views/routingListPanel';
 import { buildRoutingUrlScript } from './scripts';
-import { openSharedConnection } from './mssqlSharing';
+import {
+  openSharedConnection,
+  isMssqlInstalled,
+  promptForMssqlConnection,
+  MssqlConnectionInfo
+} from './mssqlSharing';
 
 export function activate(context: vscode.ExtensionContext): void {
   const store = new ProfileStore(context);
@@ -65,6 +70,108 @@ const AUTH_CHOICES: { label: string; value: AuthType; detail: string }[] = [
 ];
 
 async function addServer(
+  store: ProfileStore,
+  client: SqlClient,
+  tree: AlwaysOnTreeProvider
+): Promise<void> {
+  // Prefer the Microsoft SQL Server extension's own connection picker so the
+  // connect experience matches that extension. Fall back to our own prompts
+  // when it is not installed.
+  if (isMssqlInstalled()) {
+    const connInfo = await promptForMssqlConnection();
+    if (!connInfo) {
+      return; // user cancelled
+    }
+    const { profile, password, connectionString } = mssqlInfoToProfile(connInfo);
+    await connectAndRegister(store, client, tree, profile, password, connectionString);
+    return;
+  }
+  await addServerManual(store, client, tree);
+}
+
+/** Map a Microsoft connection-picker result onto our profile model. */
+function mssqlInfoToProfile(info: MssqlConnectionInfo): {
+  profile: ConnectionProfile;
+  password?: string;
+  connectionString?: string;
+} {
+  const authType = mapMssqlAuthType(info.authenticationType);
+  const encrypt =
+    info.encrypt === true || info.encrypt === 'Mandatory' || info.encrypt === 'Strict';
+  const profile: ConnectionProfile = {
+    id: `${info.server}::${authType}::${info.user ?? ''}`,
+    server: info.server,
+    port: info.port,
+    authType,
+    userName: info.user || undefined,
+    encrypt: encrypt || authType.startsWith('entra'),
+    trustServerCertificate: info.trustServerCertificate ?? !encrypt,
+    fromConnectionString: !info.server && !!info.connectionString
+  };
+  return { profile, password: info.password || undefined, connectionString: info.connectionString };
+}
+
+function mapMssqlAuthType(authenticationType?: string): AuthType {
+  switch (authenticationType) {
+    case 'Integrated':
+      return 'windows';
+    case 'AzureMFA':
+      return 'entra-integrated';
+    case 'SqlLogin':
+      return 'sql';
+    default:
+      return authenticationType?.toLowerCase().includes('password') ? 'entra-password' : 'sql';
+  }
+}
+
+/** Connect, validate SQL 2012+/HADR, and persist the profile on success. */
+async function connectAndRegister(
+  store: ProfileStore,
+  client: SqlClient,
+  tree: AlwaysOnTreeProvider,
+  profile: ConnectionProfile,
+  password?: string,
+  connectionString?: string
+): Promise<void> {
+  await vscode.window.withProgress(
+    { location: { viewId: 'alwaysonTools.servers' }, title: `Connecting to ${profile.server}...` },
+    async () => {
+      try {
+        if (profile.fromConnectionString && connectionString) {
+          await client.connectWithString(profile.id, connectionString);
+        } else {
+          await client.connect(profile, password);
+        }
+        const info = await client.getServerInfo(profile.id);
+
+        if (info.majorVersion < 11) {
+          await client.disconnect(profile.id);
+          vscode.window.showErrorMessage(
+            'This version of SQL Server does not support AlwaysOn Availability Groups (requires SQL Server 2012 or later).'
+          );
+          return;
+        }
+        if (!info.isHadrEnabled) {
+          await client.disconnect(profile.id);
+          vscode.window.showErrorMessage(
+            'AlwaysOn Availability Groups is not enabled on this instance. Enable it and configure an Availability Group before using this tool.'
+          );
+          return;
+        }
+
+        // For connection-string profiles, persist the string as the secret so
+        // reconnect can reuse it; otherwise persist the password.
+        await store.upsert(profile, profile.fromConnectionString ? connectionString : password);
+        tree.refresh();
+        vscode.window.showInformationMessage(`Connected to ${profile.server}.`);
+      } catch (err) {
+        vscode.window.showErrorMessage(`Connection failed: ${errMessage(err)}`);
+      }
+    }
+  );
+}
+
+async function addServerManual(
   store: ProfileStore,
   client: SqlClient,
   tree: AlwaysOnTreeProvider
@@ -139,36 +246,7 @@ async function addServer(
     trustServerCertificate: !requiresEncrypt
   };
 
-  await vscode.window.withProgress(
-    { location: { viewId: 'alwaysonTools.servers' }, title: `Connecting to ${server}...` },
-    async () => {
-      try {
-        await client.connect(profile, password);
-        const info = await client.getServerInfo(profile.id);
-
-        if (info.majorVersion < 11) {
-          await client.disconnect(profile.id);
-          vscode.window.showErrorMessage(
-            'This version of SQL Server does not support AlwaysOn Availability Groups (requires SQL Server 2012 or later).'
-          );
-          return;
-        }
-        if (!info.isHadrEnabled) {
-          await client.disconnect(profile.id);
-          vscode.window.showErrorMessage(
-            'AlwaysOn Availability Groups is not enabled on this instance. Enable it and configure an Availability Group before using this tool.'
-          );
-          return;
-        }
-
-        await store.upsert(profile, password);
-        tree.refresh();
-        vscode.window.showInformationMessage(`Connected to ${server}.`);
-      } catch (err) {
-        vscode.window.showErrorMessage(`Connection failed: ${errMessage(err)}`);
-      }
-    }
-  );
+  await connectAndRegister(store, client, tree, profile, password);
 }
 
 function promptPassword(): Thenable<string | undefined> {
@@ -194,8 +272,9 @@ async function reconnect(
   if (!profile) {
     return;
   }
-  let password = await store.getPassword(profile.id);
-  if (password === undefined && profile.authType !== 'entra-integrated') {
+  const secret = await store.getPassword(profile.id);
+  let password = secret;
+  if (!profile.fromConnectionString && password === undefined && profile.authType !== 'entra-integrated') {
     password = await promptPassword();
     if (password === undefined) {
       return;
@@ -206,7 +285,11 @@ async function reconnect(
     { location: { viewId: 'alwaysonTools.servers' }, title: `Connecting to ${profile.server}...` },
     async () => {
       try {
-        await client.connect(profile, password);
+        if (profile.fromConnectionString && secret) {
+          await client.connectWithString(profile.id, secret);
+        } else {
+          await client.connect(profile, password);
+        }
         tree.refresh();
       } catch (err) {
         vscode.window.showErrorMessage(`Connection failed: ${errMessage(err)}`);
