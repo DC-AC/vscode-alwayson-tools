@@ -92,7 +92,7 @@ export class AlwaysOnTreeProvider implements vscode.TreeDataProvider<TreeNode> {
         }
         const ags = await this.client.getAvailabilityGroups(element.profile.id);
         if (ags.length === 0) {
-          return [infoNode(element.profile, 'No availability groups found')];
+          return [infoNode(element.profile, 'No availability groups are primary on this instance')];
         }
         return ags.map(
           (ag) =>

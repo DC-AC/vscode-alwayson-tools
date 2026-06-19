@@ -157,11 +157,19 @@ export class SqlClient {
     };
   }
 
-  /** select name from sys.availability_groups */
+  /**
+   * Availability groups for which the connected instance is currently the
+   * PRIMARY replica. Read-only routing changes (ALTER AVAILABILITY GROUP ...
+   * MODIFY REPLICA) must be run on the primary, so only those are listed.
+   */
   async getAvailabilityGroups(profileId: string): Promise<string[]> {
-    const rows = await this.executor(profileId).rows(
-      'select name from sys.availability_groups order by name'
-    );
+    const rows = await this.executor(profileId).rows(`select ag.name
+from sys.availability_groups ag
+join sys.dm_hadr_availability_replica_states ars
+  on ars.group_id = ag.group_id
+where ars.is_local = 1
+  and ars.role = 1
+order by ag.name`);
     return rows.map((r) => String(r.name));
   }
 

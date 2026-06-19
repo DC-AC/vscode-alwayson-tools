@@ -470,7 +470,9 @@ async function configureFromObjectExplorer(
   // Guided pick: Availability Group -> replica -> action.
   const ags = await client.getAvailabilityGroups(profile.id);
   if (ags.length === 0) {
-    vscode.window.showInformationMessage('This instance has no AlwaysOn Availability Groups.');
+    vscode.window.showInformationMessage(
+      'No AlwaysOn Availability Groups are primary on this instance. Connect to the primary replica (or the AG listener).'
+    );
     return;
   }
   const agName = ags.length === 1 ? ags[0] : await vscode.window.showQuickPick(ags, {
