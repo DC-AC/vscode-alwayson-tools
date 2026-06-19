@@ -67,6 +67,10 @@ Package a `.vsix` with:
 npx vsce package
 ```
 
+## About DCAC
+
+**DCAC (Denny Cherry & Associates Consulting)** is a Microsoft data-platform consulting firm. We help organizations design, secure, migrate, and operate mission-critical SQL Server and Azure environments — covering high-availability architectures such as AlwaysOn Availability Groups, performance tuning, data security and compliance, cloud migration, and 24×7 managed database services.
+
 ## License
 
 MIT

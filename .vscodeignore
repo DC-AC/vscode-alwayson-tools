@@ -1,7 +1,13 @@
 .vscode/**
+.vscode-test/**
 src/**
+out/**
 **/*.ts
 **/*.map
 tsconfig.json
+esbuild.js
 .gitignore
+.gitattributes
 node_modules/.bin/**
+media/icon-source.svg
+**/.DS_Store
