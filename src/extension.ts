@@ -717,6 +717,6 @@ async function configureFromObjectExplorer(
 
 function about(): void {
   vscode.window.showInformationMessage(
-    'AlwaysOn Tools — Read-Only Routing Configuration. A VS Code port of the Denny Cherry & Associates Consulting AlwaysOn Tools.'
+    'AlwaysOn Read-Only Routing Configuration — a VS Code port of the Denny Cherry & Associates Consulting AlwaysOn Tools.'
   );
 }

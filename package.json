@@ -41,7 +41,7 @@
       "activitybar": [
         {
           "id": "alwaysonTools",
-          "title": "AlwaysOn Tools",
+          "title": "AlwaysOn Read-Only Routing",
           "icon": "media/icon.svg"
         }
       ]
@@ -65,53 +65,53 @@
       {
         "command": "alwaysonTools.addServer",
         "title": "Connect to a Server",
-        "category": "AlwaysOn Tools",
+        "category": "AlwaysOn Read-Only Routing",
         "icon": "$(add)"
       },
       {
         "command": "alwaysonTools.refresh",
         "title": "Refresh",
-        "category": "AlwaysOn Tools",
+        "category": "AlwaysOn Read-Only Routing",
         "icon": "$(refresh)"
       },
       {
         "command": "alwaysonTools.removeServer",
         "title": "Remove Server",
-        "category": "AlwaysOn Tools",
+        "category": "AlwaysOn Read-Only Routing",
         "icon": "$(trash)"
       },
       {
         "command": "alwaysonTools.reconnect",
         "title": "Reconnect",
-        "category": "AlwaysOn Tools",
+        "category": "AlwaysOn Read-Only Routing",
         "icon": "$(plug)"
       },
       {
         "command": "alwaysonTools.configureRoutingList",
         "title": "Configure Read-Only Routing List...",
-        "category": "AlwaysOn Tools",
+        "category": "AlwaysOn Read-Only Routing",
         "icon": "$(list-ordered)"
       },
       {
         "command": "alwaysonTools.configureRoutingUrl",
         "title": "Configure Read-Only Routing URL...",
-        "category": "AlwaysOn Tools",
+        "category": "AlwaysOn Read-Only Routing",
         "icon": "$(link)"
       },
       {
         "command": "alwaysonTools.clearServerList",
         "title": "Clear Server List",
-        "category": "AlwaysOn Tools"
+        "category": "AlwaysOn Read-Only Routing"
       },
       {
         "command": "alwaysonTools.about",
         "title": "About",
-        "category": "AlwaysOn Tools"
+        "category": "AlwaysOn Read-Only Routing"
       },
       {
         "command": "alwaysonTools.configureFromObjectExplorer",
         "title": "Configure AlwaysOn Read-Only Routing...",
-        "category": "AlwaysOn Tools",
+        "category": "AlwaysOn Read-Only Routing",
         "icon": "media/icon.svg"
       }
     ],

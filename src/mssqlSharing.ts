@@ -140,7 +140,7 @@ export async function openSharedConnection(connectionId: string): Promise<Shared
   } catch (err) {
     // Most commonly a denied / not-yet-granted permission.
     const choice = await vscode.window.showWarningMessage(
-      'The SQL Server extension declined to share this connection. Grant permission to AlwaysOn Tools?',
+      'The SQL Server extension declined to share this connection. Grant permission to AlwaysOn Read-Only Routing?',
       'Edit Permissions'
     );
     if (choice === 'Edit Permissions') {

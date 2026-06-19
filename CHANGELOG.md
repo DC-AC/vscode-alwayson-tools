@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the **AlwaysOn Tools** extension are documented here.
+All notable changes to the **AlwaysOn Read-Only Routing Configuration** extension are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
